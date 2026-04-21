@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hindi Ambiguity Resolver</title>
+<link href="https://fonts.googleapis.com/css2?family=Tiro+Devanagari+Hindi:ital@0;1&family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f0c;
+    --bg2: #161710;
+    --bg3: #1e2018;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #e8e6de;
+    --text2: #9a9890;
+    --text3: #5c5b56;
+    --gold: #c9a84c;
+    --gold2: #e8c97a;
+    --teal: #3fbf8e;
+    --teal2: #6dd4ac;
+    --coral: #d4614a;
+    --coral2: #e88572;
+    --purple: #9b7fd4;
+    --purple2: #bba0e8;
+    --amber: #d4974a;
+    --amber2: #e8b87a;
+    --r: 10px;
+    --r2: 16px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    padding: 32px 20px 60px;
+  }
+
+  .app { max-width: 780px; margin: 0 auto; }
+
+  /* Header */
+  .hdr { margin-bottom: 36px; }
+  .hdr-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; }
+  .hdr h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 32px; font-weight: 300; font-style: italic;
+    color: var(--text); letter-spacing: -0.5px; line-height: 1.1;
+  }
+  .hdr h1 span { color: var(--gold); }
+  .hdr-sub { font-size: 12px; color: var(--text3); letter-spacing: .08em; margin-top: 8px; }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--teal); letter-spacing: .06em;
+    padding: 4px 10px; border: 1px solid rgba(63,191,142,0.25);
+    border-radius: 99px; white-space: nowrap;
+  }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* Stats row */
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-bottom: 24px; }
+  .stat {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 14px 12px; text-align: center;
+  }
+  .stat .val { font-size: 24px; font-weight: 500; font-family: 'Fraunces', serif; color: var(--gold); }
+  .stat .lbl { font-size: 10px; color: var(--text3); margin-top: 3px; letter-spacing: .06em; }
+
+  /* Filter bar */
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+  .fchip {
+    font-size: 11px; padding: 5px 13px; border-radius: 99px; cursor: pointer;
+    border: 1px solid var(--border2); color: var(--text2); background: transparent;
+    font-family: 'DM Mono', monospace; letter-spacing: .04em; transition: all .15s;
+  }
+  .fchip:hover { border-color: var(--gold); color: var(--gold); }
+  .fchip.active { background: var(--gold); color: var(--bg); border-color: var(--gold); font-weight: 500; }
+  .fchip.f-lexical.active    { background: var(--teal);   border-color: var(--teal);   color: var(--bg); }
+  .fchip.f-syntactic.active  { background: var(--purple); border-color: var(--purple); color: var(--bg); }
+  .fchip.f-semantic.active   { background: var(--coral);  border-color: var(--coral);  color: #fff; }
+  .fchip.f-pragmatic.active  { background: var(--amber);  border-color: var(--amber);  color: var(--bg); }
+  .fchip.f-idiomatic.active  { background: var(--gold2);  border-color: var(--gold2);  color: var(--bg); }
+  .fchip.f-referential.active{ background: var(--purple2);border-color: var(--purple2);color: var(--bg); }
+
+  /* Search input */
+  .search-wrap { position: relative; margin-bottom: 16px; }
+  .search-wrap input {
+    width: 100%; padding: 14px 50px 14px 16px;
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: var(--r); color: var(--text);
+    font-size: 16px; font-family: 'Tiro Devanagari Hindi', serif;
+    outline: none; transition: border-color .15s;
+    letter-spacing: .01em;
+  }
+  .search-wrap input:focus { border-color: var(--gold); }
+  .search-wrap input::placeholder { color: var(--text3); font-size: 14px; }
+  .search-btn {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: var(--gold); color: var(--bg); border: none; border-radius: 6px;
+    padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;
+    font-family: 'DM Mono', monospace; transition: background .15s;
+  }
+  .search-btn:hover { background: var(--gold2); }
+
+  /* Chips */
+  .chips-label { font-size: 10px; color: var(--text3); letter-spacing: .08em; margin-bottom: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+  .chip {
+    font-size: 12px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--border); color: var(--text2);
+    background: var(--bg2); font-family: 'Tiro Devanagari Hindi', serif;
+    transition: all .15s; letter-spacing: .01em;
+  }
+  .chip:hover { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.08); }
+
+  /* Result card */
+  .result-wrap { margin-bottom: 16px; }
+  .rcard {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: var(--r2); overflow: hidden;
+    animation: fadeIn .2s ease;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+  .rcard-hdr {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap;
+  }
+  .rcard-hdr .sent {
+    font-family: 'Tiro Devanagari Hindi', serif;
+    font-size: 20px; color: var(--text); line-height: 1.4; flex: 1;
+  }
+  .type-pill {
+    font-size: 10px; padding: 3px 10px; border-radius: 99px;
+    font-family: 'DM Mono', monospace; letter-spacing: .05em; white-space: nowrap;
+    flex-shrink: 0; margin-top: 4px;
+  }
+  .tp-lexical    { background: rgba(63,191,142,0.15);  color: var(--teal2); }
+  .tp-syntactic  { background: rgba(155,127,212,0.15); color: var(--purple2); }
+  .tp-semantic   { background: rgba(212,97,74,0.15);   color: var(--coral2); }
+  .tp-pragmatic  { background: rgba(212,151,74,0.15);  color: var(--amber2); }
+  .tp-idiomatic  { background: rgba(201,168,76,0.15);  color: var(--gold2); }
+  .tp-referential{ background: rgba(187,160,232,0.15); color: var(--purple2); }
+
+  /* Multiple meanings grid */
+  .meanings-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .meaning {
+    padding: 16px 18px; position: relative;
+  }
+  .meaning:first-child { border-right: 1px solid var(--border); }
+  .meaning + .meaning + .meaning { border-top: 1px solid var(--border); }
+  .meaning + .meaning + .meaning + .meaning { border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
+
+  .mlabel {
+    font-size: 9px; letter-spacing: .1em; color: var(--text3);
+    margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .mlabel::before {
+    content: ''; display: inline-block; width: 16px; height: 1px;
+  }
+  .m1 .mlabel::before { background: var(--teal); }
+  .m2 .mlabel::before { background: var(--coral); }
+  .m3 .mlabel::before { background: var(--purple); }
+  .m4 .mlabel::before { background: var(--amber); }
+
+  .mhi {
+    font-family: 'Tiro Devanagari Hindi', serif;
+    font-size: 16px; color: var(--text); line-height: 1.55; margin-bottom: 6px;
+  }
+  .men { font-size: 11px; color: var(--text3); line-height: 1.5; font-style: italic; }
+
+  /* Example tag on card */
+  .example-tag {
+    padding: 8px 18px; border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text3); font-style: italic;
+    font-family: 'Tiro Devanagari Hindi', serif;
+  }
+
+  /* Empty / not found */
+  .empty { text-align: center; padding: 40px 20px; color: var(--text3); font-size: 13px; }
+  .notfound {
+    background: rgba(212,97,74,0.08); border: 1px solid rgba(212,97,74,0.25);
+    border-radius: var(--r); padding: 16px 18px;
+    color: var(--coral2); font-size: 13px; line-height: 1.6;
+  }
+
+  /* Browse grid */
+  .browse-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr));
+    gap: 8px; margin-top: 0;
+  }
+  .browse-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 12px 14px; cursor: pointer;
+    transition: all .15s;
+  }
+  .browse-card:hover { border-color: var(--gold); background: rgba(201,168,76,0.05); }
+  .browse-card .bkey {
+    font-family: 'Tiro Devanagari Hindi', serif;
+    font-size: 14px; color: var(--text); margin-bottom: 4px; line-height: 1.4;
+  }
+  .browse-card .btype { font-size: 10px; color: var(--text3); letter-spacing: .04em; }
+
+  /* Section label */
+  .sec-label {
+    font-size: 10px; letter-spacing: .1em; color: var(--text3);
+    margin-bottom: 10px; margin-top: 4px;
+  }
+
+  @media (max-width: 520px) {
+    .meanings-grid { grid-template-columns: 1fr; }
+    .meaning:first-child { border-right: none; border-bottom: 1px solid var(--border); }
+    .stats { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="hdr">
+    <div class="hdr-top">
+      <h1>Hindi <span>Ambiguity</span><br>Resolver</h1>
+      <div class="live-badge"><span class="live-dot"></span>60 entries</div>
+    </div>
+    <div class="hdr-sub">हिंदी भाषा की अस्पष्टता — शब्द, वाक्य, मुहावरे</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="val" id="s-total">60</div><div class="lbl">total entries</div></div>
+    <div class="stat"><div class="val" id="s-filtered">60</div><div class="lbl">showing</div></div>
+    <div class="stat"><div class="val">6</div><div class="lbl">ambiguity types</div></div>
+    <div class="stat"><div class="val">2–4</div><div class="lbl">meanings each</div></div>
+  </div>
+
+  <div class="filters" id="filterBar"></div>
+
+  <div class="search-wrap">
+    <input type="text" id="searchInp" placeholder="हिंदी वाक्य या शब्द खोजें... (type or paste)" />
+    <button class="search-btn" onclick="doSearch()">खोजें</button>
+  </div>
+
+  <div class="chips-label">QUICK EXAMPLES</div>
+  <div class="chips" id="quickChips"></div>
+
+  <div class="sec-label" id="browseLabel">BROWSE ALL ENTRIES</div>
+  <div id="mainOut"></div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// EXPANDED DATABASE — 60 entries, up to 4 meanings, with examples
+// ═══════════════════════════════════════════════════════════════
+const DB = [
+  // ── LEXICAL ──────────────────────────────────────────────────
+  { key:"कल", type:"lexical",
+    meanings:[
+      {hi:"बीता हुआ दिन", en:"Yesterday — the day that has passed"},
+      {hi:"आने वाला दिन", en:"Tomorrow — the day yet to come"},
+    ], example:"मैं कल आऊंगा — am I coming yesterday or tomorrow?" },
+
+  { key:"सोना", type:"lexical",
+    meanings:[
+      {hi:"नींद लेना", en:"To sleep — the act of resting"},
+      {hi:"स्वर्ण धातु", en:"Gold — the precious yellow metal"},
+    ], example:"उसे सोना पसंद है — does he like sleeping or gold?" },
+
+  { key:"पत्र", type:"lexical",
+    meanings:[
+      {hi:"चिट्ठी / पत्र", en:"A letter — written correspondence"},
+      {hi:"पेड़ का पत्ता", en:"A leaf — part of a plant or tree"},
+    ], example:"पत्र गिर गया — did a letter fall or a leaf?" },
+
+  { key:"बैंक", type:"lexical",
+    meanings:[
+      {hi:"वित्तीय संस्थान", en:"A financial institution"},
+      {hi:"नदी का किनारा", en:"The bank / shore of a river"},
+    ], example:"वह बैंक गया — financial bank or river shore?" },
+
+  { key:"अर्थ", type:"lexical",
+    meanings:[
+      {hi:"मतलब / अभिप्राय", en:"Meaning — the sense of a word"},
+      {hi:"धन / संपत्ति", en:"Wealth / money — financial resources"},
+    ], example:"अर्थ समझ नहीं आया — meaning or money?" },
+
+  { key:"कुल", type:"lexical",
+    meanings:[
+      {hi:"सब मिलाकर / कुल योग", en:"Total — the sum of all things"},
+      {hi:"वंश / परिवार", en:"Lineage / family clan"},
+    ], example:"कुल मिलाकर क्या हुआ?" },
+
+  { key:"नेता", type:"lexical",
+    meanings:[
+      {hi:"राजनीतिक नेता", en:"A political leader or politician"},
+      {hi:"किसी समूह का अगुवा", en:"Leader of any group or movement"},
+    ], example:"वह नेता बन गया" },
+
+  { key:"सफर", type:"lexical",
+    meanings:[
+      {hi:"यात्रा / भ्रमण", en:"A physical journey or travel"},
+      {hi:"जीवन का अनुभव", en:"The journey of life (metaphorical)"},
+    ], example:"यह सफर आसान नहीं था" },
+
+  { key:"आम", type:"lexical",
+    meanings:[
+      {hi:"साधारण / सामान्य", en:"Common / ordinary / usual"},
+      {hi:"आम का फल", en:"Mango — the tropical fruit"},
+    ], example:"आम आदमी — common man or mango man?" },
+
+  { key:"हार", type:"lexical",
+    meanings:[
+      {hi:"पराजय / हार जाना", en:"Defeat — losing a contest"},
+      {hi:"गले का हार (आभूषण)", en:"A garland or necklace"},
+    ], example:"उसने हार मान ली" },
+
+  { key:"जल", type:"lexical",
+    meanings:[
+      {hi:"पानी", en:"Water — the liquid"},
+      {hi:"जलना / जलाना", en:"To burn — fire-related"},
+    ], example:"जल जाओ — go to water or burn?" },
+
+  { key:"कर", type:"lexical",
+    meanings:[
+      {hi:"टैक्स / कर (tax)", en:"Tax — money paid to government"},
+      {hi:"हाथ / करना (do)", en:"Hand / to do something"},
+    ], example:"कर दो — pay tax or just do it?" },
+
+  { key:"फल", type:"lexical",
+    meanings:[
+      {hi:"खाने का फल", en:"Fruit — edible produce of a plant"},
+      {hi:"परिणाम / नतीजा", en:"Result / outcome / consequence"},
+    ], example:"मेहनत का फल — result or fruit of labour?" },
+
+  { key:"मन", type:"lexical",
+    meanings:[
+      {hi:"मस्तिष्क / हृदय (mind/heart)", en:"Mind — the thinking faculty"},
+      {hi:"वजन की इकाई (40 kg)", en:"Maund — a unit of weight"},
+    ], example:"मन में क्या है" },
+
+  { key:"काल", type:"lexical",
+    meanings:[
+      {hi:"समय / युग", en:"Time / era / period"},
+      {hi:"मृत्यु / यमराज", en:"Death / the god of death (Yama)"},
+    ], example:"काल आ गया — time arrived or death came?" },
+
+  { key:"शक्ति", type:"lexical",
+    meanings:[
+      {hi:"ताकत / बल", en:"Physical strength or power"},
+      {hi:"देवी शक्ति / दुर्गा", en:"Goddess Shakti / divine energy"},
+    ], example:"शक्ति की पूजा" },
+
+  { key:"नव", type:"lexical",
+    meanings:[
+      {hi:"नया / नवीन", en:"New / fresh / novel"},
+      {hi:"नौ (संख्या 9)", en:"Nine — the number 9"},
+    ], example:"नव रस — nine emotions or new emotions?" },
+
+  { key:"पर", type:"lexical",
+    meanings:[
+      {hi:"लेकिन / परंतु", en:"But / however — a conjunction"},
+      {hi:"पंख (wing)", en:"Wing — a bird's appendage"},
+      {hi:"ऊपर / पर (on/upon)", en:"On / upon — a preposition"},
+    ], example:"पर क्या होगा" },
+
+  { key:"राज", type:"lexical",
+    meanings:[
+      {hi:"राज्य / शासन", en:"Kingdom / rule / governance"},
+      {hi:"रहस्य / भेद", en:"Secret / mystery"},
+    ], example:"उसने राज खोल दिया" },
+
+  { key:"सूर", type:"lexical",
+    meanings:[
+      {hi:"सूरज / सूर्य", en:"The sun"},
+      {hi:"वीर / बहादुर", en:"Brave / heroic person"},
+      {hi:"अंधा (sightless)", en:"Blind — without sight"},
+    ], example:"सूरदास — the saint-poet" },
+
+  // ── FULL SENTENCE — LEXICAL ───────────────────────────────────
+  { key:"मुझे सोना चाहिए", type:"lexical",
+    meanings:[
+      {hi:"मुझे नींद लेनी है", en:"I need to sleep — I am tired and want rest"},
+      {hi:"मुझे स्वर्ण धातु चाहिए", en:"I want gold — the precious metal"},
+    ], example:"Spoken without context, both readings are equally valid" },
+
+  { key:"वह बैंक गया", type:"lexical",
+    meanings:[
+      {hi:"वह वित्तीय संस्थान में गया", en:"He went to the financial bank"},
+      {hi:"वह नदी के किनारे गया", en:"He went to the river bank / shore"},
+    ], example:"Location context determines the meaning" },
+
+  { key:"पत्र गिर गया", type:"lexical",
+    meanings:[
+      {hi:"चिट्ठी जमीन पर गिर गई", en:"The letter fell to the ground"},
+      {hi:"पेड़ का पत्ता नीचे गिर गया", en:"The leaf fell down from the tree"},
+    ], example:"Season or context disambiguates" },
+
+  { key:"वह कल आएगा", type:"lexical",
+    meanings:[
+      {hi:"वह आने वाले दिन आएगा", en:"He will come tomorrow"},
+      {hi:"वह बीते दिन आया था", en:"He came yesterday (misread tense)"},
+    ], example:"कल is the canonical Hindi time-ambiguity word" },
+
+  { key:"मेरा फोन मर गया", type:"lexical",
+    meanings:[
+      {hi:"मेरे फोन की बैटरी पूरी तरह खत्म हो गई", en:"My phone's battery completely died"},
+      {hi:"मेरा फोन स्थायी रूप से खराब हो गया", en:"My phone permanently stopped working"},
+    ], example:"Modern colloquial usage" },
+
+  { key:"आम आदमी", type:"lexical",
+    meanings:[
+      {hi:"साधारण / सामान्य व्यक्ति", en:"A common / ordinary person"},
+      {hi:"राजनीतिक दल का नाम (AAP)", en:"A political party name (Aam Aadmi Party)"},
+    ], example:"Context determines political vs literal reading" },
+
+  { key:"उसका हाथ तंग है", type:"lexical",
+    meanings:[
+      {hi:"उसका हाथ शारीरिक रूप से तंग है", en:"His hand is physically tight / injured"},
+      {hi:"वह आर्थिक रूप से तंगहाल है", en:"He is financially struggling / broke"},
+    ], example:"Idiomatic vs literal split" },
+
+  // ── SYNTACTIC ────────────────────────────────────────────────
+  { key:"मैंने दूरबीन से आदमी को देखा", type:"syntactic",
+    meanings:[
+      {hi:"मैंने दूरबीन का उपयोग करके आदमी देखा", en:"I saw the man using binoculars (I had them)"},
+      {hi:"मैंने उस आदमी को देखा जिसके पास दूरबीन थी", en:"I saw the man who had binoculars (he had them)"},
+    ], example:"Instrumental phrase attachment ambiguity" },
+
+  { key:"लड़की ने टोपी वाले लड़के को बुलाया", type:"syntactic",
+    meanings:[
+      {hi:"लड़की ने उस लड़के को बुलाया जो टोपी पहने था", en:"The girl called the boy who was wearing a cap"},
+      {hi:"टोपी वाली लड़की ने लड़के को बुलाया", en:"The girl with the cap called the boy"},
+    ], example:"Modifier attachment — who wears the cap?" },
+
+  { key:"बच्चों को पढ़ाने वाले शिक्षक आए", type:"syntactic",
+    meanings:[
+      {hi:"वे शिक्षक आए जो बच्चों को पढ़ाते हैं", en:"The teachers who teach children came"},
+      {hi:"शिक्षक बच्चों को पढ़ाने के उद्देश्य से आए", en:"The teachers came for the purpose of teaching children"},
+    ], example:"Relative clause vs purpose clause" },
+
+  { key:"सुंदर लड़कियों और लड़कों का मेला", type:"syntactic",
+    meanings:[
+      {hi:"सुंदर लड़कियाँ और लड़के — दोनों की मेला", en:"Fair of beautiful girls and (all) boys"},
+      {hi:"सुंदर लड़कियाँ और सुंदर लड़के — दोनों", en:"Fair of beautiful girls and beautiful boys"},
+    ], example:"Adjective scope ambiguity" },
+
+  { key:"मैंने देखा रोता हुआ बच्चा और माँ", type:"syntactic",
+    meanings:[
+      {hi:"मैंने रोते हुए बच्चे और माँ को देखा", en:"I saw the crying child and the mother"},
+      {hi:"मैंने बच्चे को और रोती हुई माँ को देखा", en:"I saw the child and the crying mother"},
+    ], example:"Participial phrase attachment ambiguity" },
+
+  // ── SEMANTIC ─────────────────────────────────────────────────
+  { key:"बैंक में पैसे रखो", type:"semantic",
+    meanings:[
+      {hi:"वित्तीय संस्थान में धन जमा करो", en:"Deposit money in the financial bank"},
+      {hi:"नदी किनारे पैसे रखो (असामान्य)", en:"Place money on the river bank (unusual reading)"},
+    ], example:"Semantic context narrows down meaning" },
+
+  { key:"वह घर में घुस गया", type:"semantic",
+    meanings:[
+      {hi:"वह अपने घर के अंदर चला गया", en:"He entered his own house"},
+      {hi:"वह बिना अनुमति किसी के घर में दाखिल हुआ", en:"He trespassed into someone's house"},
+    ], example:"Intent changes the legal interpretation" },
+
+  { key:"उसने मुँह बंद रखा", type:"semantic",
+    meanings:[
+      {hi:"उसने शारीरिक रूप से मुँह बंद रखा", en:"He kept his mouth physically closed"},
+      {hi:"उसने कुछ नहीं बोला / चुप रहा", en:"He stayed silent and said nothing"},
+    ], example:"Literal vs idiomatic silence" },
+
+  { key:"वह पानी में उतर गया", type:"semantic",
+    meanings:[
+      {hi:"वह नदी या तालाब में प्रवेश कर गया", en:"He entered a river or pond (literal)"},
+      {hi:"वह किसी मुसीबत या समस्या में फँस गया", en:"He got into trouble / a difficult situation"},
+    ], example:"Common colloquial usage" },
+
+  { key:"उसका चेहरा उतर गया", type:"semantic",
+    meanings:[
+      {hi:"उसके चेहरे का रंग फीका पड़ गया", en:"The colour drained from his face (sadness)"},
+      {hi:"उसका मुखौटा उतर गया — असली चेहरा दिखा", en:"His mask came off — his true self was revealed"},
+    ], example:"Physical vs metaphorical face" },
+
+  { key:"काम खत्म हो गया", type:"semantic",
+    meanings:[
+      {hi:"कार्य सफलतापूर्वक पूर्ण हो गया", en:"The work was successfully completed"},
+      {hi:"यह काम बर्बाद / नष्ट हो गया", en:"This work/thing was ruined or destroyed"},
+    ], example:"Completion vs destruction reading" },
+
+  // ── PRAGMATIC ────────────────────────────────────────────────
+  { key:"क्या आप दरवाजा बंद कर सकते हैं", type:"pragmatic",
+    meanings:[
+      {hi:"क्या आपमें दरवाजा बंद करने की क्षमता है?", en:"Are you capable of closing the door? (literal question)"},
+      {hi:"कृपया दरवाजा बंद करें (विनम्र अनुरोध)", en:"Please close the door (polite indirect request)"},
+    ], example:"Classic politeness vs literal reading" },
+
+  { key:"यहाँ बहुत ठंड है", type:"pragmatic",
+    meanings:[
+      {hi:"मौसम ठंडा होने का एक तथ्य", en:"A factual observation — it is cold here"},
+      {hi:"खिड़की या दरवाजा बंद करने का अप्रत्यक्ष संकेत", en:"An indirect request to close the window or door"},
+    ], example:"Speech act theory — fact vs directive" },
+
+  { key:"सब कुछ ठीक है", type:"pragmatic",
+    meanings:[
+      {hi:"सभी चीजें वास्तव में अच्छी अवस्था में हैं", en:"Everything is genuinely fine"},
+      {hi:"मैं इस विषय पर बात नहीं करना चाहता", en:"I do not want to discuss this (evasive response)"},
+    ], example:"Surface positivity vs avoidance" },
+
+  { key:"क्या तुम खाना खाओगे", type:"pragmatic",
+    meanings:[
+      {hi:"तुमसे खाने के बारे में वास्तविक प्रश्न", en:"A genuine question about whether you will eat"},
+      {hi:"खाना खाने का निमंत्रण / आग्रह", en:"An invitation or insistence to eat"},
+    ], example:"Question vs invitation" },
+
+  { key:"तुम बहुत होशियार हो", type:"pragmatic",
+    meanings:[
+      {hi:"तुम वाकई बहुत बुद्धिमान हो (प्रशंसा)", en:"You are genuinely very smart (sincere compliment)"},
+      {hi:"तुमने चालाकी की — व्यंग्य (sarcasm)", en:"You are being cunning — sarcastic criticism"},
+    ], example:"Tone determines sincere vs sarcastic" },
+
+  { key:"बहुत अच्छा!", type:"pragmatic",
+    meanings:[
+      {hi:"वाकई बहुत अच्छा — सच्ची प्रशंसा", en:"Truly very good — genuine praise"},
+      {hi:"व्यंग्यात्मक — बिल्कुल भी अच्छा नहीं", en:"Sarcastic — not good at all (irony)"},
+    ], example:"Intonation-dependent interpretation" },
+
+  { key:"क्या यह जरूरी है", type:"pragmatic",
+    meanings:[
+      {hi:"सच में जानना चाहते हैं कि यह आवश्यक है?", en:"Genuinely asking if this is necessary"},
+      {hi:"यह जरूरी नहीं है — व्यंग्यात्मक प्रश्न", en:"Rhetorical — implying it is NOT necessary"},
+    ], example:"Rhetorical vs genuine question" },
+
+  // ── IDIOMATIC ────────────────────────────────────────────────
+  { key:"दिल टूट गया", type:"idiomatic",
+    meanings:[
+      {hi:"हृदय को शारीरिक क्षति हुई", en:"The heart was physically broken (literal)"},
+      {hi:"भावनात्मक रूप से गहरा दुख हुआ", en:"Deep emotional pain — heartbreak (figurative)"},
+    ], example:"Most common metaphor for heartbreak" },
+
+  { key:"उसकी आँखें खुल गईं", type:"idiomatic",
+    meanings:[
+      {hi:"वह नींद से जाग गया", en:"He/she woke up from sleep (literal)"},
+      {hi:"उसे वास्तविकता का बोध हो गया", en:"He/she realized the truth / had a revelation"},
+    ], example:"Awakening metaphor" },
+
+  { key:"हाथ पर हाथ धरे बैठा है", type:"idiomatic",
+    meanings:[
+      {hi:"वह शारीरिक रूप से हाथ रखे बैठा है", en:"Literally sitting with hands placed on hands"},
+      {hi:"वह बिना कुछ किए आलसी बैठा है", en:"Sitting idle, doing absolutely nothing"},
+    ], example:"Idiom for laziness / inaction" },
+
+  { key:"नाक कट गई", type:"idiomatic",
+    meanings:[
+      {hi:"नाक की शारीरिक क्षति हुई", en:"The nose was physically cut (literal)"},
+      {hi:"इज्जत / मान-सम्मान चला गया", en:"One lost their honour and reputation"},
+    ], example:"Face/honour metaphor" },
+
+  { key:"नाक में दम कर दिया", type:"idiomatic",
+    meanings:[
+      {hi:"नाक में शारीरिक रुकावट हुई", en:"Something literally blocked the nose"},
+      {hi:"बहुत परेशान कर दिया", en:"Made life very difficult / troubled someone greatly"},
+    ], example:"Harassment idiom" },
+
+  { key:"काम तमाम हो गया", type:"idiomatic",
+    meanings:[
+      {hi:"कार्य पूर्ण हो गया", en:"The work / task is completely finished"},
+      {hi:"किसी की मृत्यु हो गई या बर्बादी हुई", en:"Someone was finished off / killed (euphemism)"},
+    ], example:"Completion vs dark euphemism" },
+
+  { key:"आँखें चार हो गईं", type:"idiomatic",
+    meanings:[
+      {hi:"चार आँखें शारीरिक रूप से मिलीं", en:"Four eyes literally met (strange literal reading)"},
+      {hi:"दो लोग पहली बार मिले / प्रेम हुआ", en:"Two people met / fell in love (idiom)"},
+    ], example:"Classic love idiom" },
+
+  { key:"मुँह में पानी आ गया", type:"idiomatic",
+    meanings:[
+      {hi:"मुँह में शारीरिक रूप से पानी भर आया", en:"Water literally filled in the mouth"},
+      {hi:"भोजन देखकर खाने की इच्छा हुई", en:"The mouth watered — craving food"},
+    ], example:"Salivation idiom" },
+
+  { key:"पीठ में छुरा घोंपना", type:"idiomatic",
+    meanings:[
+      {hi:"किसी की पीठ में शारीरिक रूप से छुरा मारना", en:"Literally stabbing someone in the back"},
+      {hi:"विश्वासघात करना / धोखा देना", en:"Betrayal — stabbing in the back (figurative)"},
+    ], example:"Universal betrayal metaphor" },
+
+  { key:"उसने हाथ खींच लिया", type:"idiomatic",
+    meanings:[
+      {hi:"उसने शारीरिक रूप से हाथ पीछे किया", en:"He physically pulled his hand back"},
+      {hi:"उसने समर्थन / सहयोग वापस ले लिया", en:"He withdrew his support or cooperation"},
+    ], example:"Support withdrawal idiom" },
+
+  { key:"दाँत खट्टे हो गए", type:"idiomatic",
+    meanings:[
+      {hi:"दाँतों में खट्टापन महसूस हुआ", en:"The teeth literally felt sour"},
+      {hi:"बुरी तरह हार गया / मात खाई", en:"Was badly defeated — got a taste of defeat"},
+    ], example:"Defeat idiom" },
+
+  // ── REFERENTIAL ──────────────────────────────────────────────
+  { key:"राम ने श्याम को उसकी किताब दी", type:"referential",
+    meanings:[
+      {hi:"राम ने राम की किताब श्याम को दी", en:"Ram gave Ram's own book to Shyam"},
+      {hi:"राम ने श्याम की किताब वापस श्याम को दी", en:"Ram returned Shyam's book to Shyam"},
+    ], example:"'उसकी' is ambiguous — whose book?" },
+
+  { key:"मोहन ने राम से कहा कि वह बीमार है", type:"referential",
+    meanings:[
+      {hi:"मोहन ने कहा कि मोहन स्वयं बीमार है", en:"Mohan said that Mohan himself is sick"},
+      {hi:"मोहन ने कहा कि राम बीमार है", en:"Mohan said that Ram is sick"},
+    ], example:"Pronoun 'वह' refers to which person?" },
+
+  { key:"वह किताब टेबल पर है जो मैंने पढ़ी", type:"referential",
+    meanings:[
+      {hi:"मैंने जो किताब पढ़ी वह टेबल पर रखी है", en:"The book that I read is on the table"},
+      {hi:"जो किताब टेबल पर है उसे मैंने पढ़ा", en:"The book on the table is one I have read"},
+    ], example:"Relative clause referent ambiguity" },
+
+  { key:"सीता ने गीता से कहा कि उसके पति आए हैं", type:"referential",
+    meanings:[
+      {hi:"सीता ने कहा कि सीता के पति आए हैं", en:"Sita said that Sita's husband has come"},
+      {hi:"सीता ने कहा कि गीता के पति आए हैं", en:"Sita told Geeta that Geeta's husband has come"},
+    ], example:"Classic pronoun reference ambiguity" },
+
+  { key:"उसने अपनी माँ को उसकी बात बताई", type:"referential",
+    meanings:[
+      {hi:"उसने अपनी माँ को उसी की बात बताई", en:"He told his mother about his own matter"},
+      {hi:"उसने अपनी माँ को किसी और की बात बताई", en:"He told his mother about someone else's matter"},
+    ], example:"Three-way pronoun ambiguity" },
+
+  { key:"जब राम आया तो उसने खाना खाया", type:"referential",
+    meanings:[
+      {hi:"जब राम आया तो राम ने खाना खाया", en:"When Ram came, Ram ate the food"},
+      {hi:"जब राम आया तो किसी और ने खाना खाया", en:"When Ram came, someone else ate the food"},
+    ], example:"Subject of eating is ambiguous" },
+];
+
+// ── Type metadata ──────────────────────────────────────────────
+const TYPE_META = {
+  lexical:     { label:"शाब्दिक",     en:"Lexical",      color:"teal" },
+  syntactic:   { label:"वाक्यरचना",   en:"Syntactic",    color:"purple" },
+  semantic:    { label:"अर्थात्मक",   en:"Semantic",     color:"coral" },
+  pragmatic:   { label:"व्यावहारिक",  en:"Pragmatic",    color:"amber" },
+  idiomatic:   { label:"मुहावरा",     en:"Idiomatic",    color:"gold" },
+  referential: { label:"संदर्भात्मक", en:"Referential",  color:"purple2" },
+};
+
+const MCLASS = ["m1","m2","m3","m4"];
+
+// ── State ──────────────────────────────────────────────────────
+let activeFilter = null;
+let searchQuery  = "";
+
+// ── Build filters ──────────────────────────────────────────────
+function buildFilters() {
+  const bar = document.getElementById("filterBar");
+  bar.innerHTML = "";
+  const all = document.createElement("button");
+  all.className = "fchip active"; all.textContent = "सभी  All";
+  all.onclick = () => setFilter(null, all);
+  bar.appendChild(all);
+  for (const [k, v] of Object.entries(TYPE_META)) {
+    const b = document.createElement("button");
+    b.className = `fchip f-${k}`;
+    b.textContent = `${v.label}  ${v.en}`;
+    b.onclick = () => setFilter(k, b);
+    bar.appendChild(b);
+  }
+}
+
+function setFilter(type, el) {
+  activeFilter = type;
+  document.querySelectorAll(".fchip").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  render();
+}
+
+// ── Quick chips ───────────────────────────────────────────────
+const QUICK = ["मुझे सोना चाहिए","वह बैंक गया","दिल टूट गया","कल","आम","हार","दाँत खट्टे हो गए","आँखें चार हो गईं","यहाँ बहुत ठंड है","बहुत अच्छा!","मोहन ने राम से कहा कि वह बीमार है","पर"];
+
+function buildChips() {
+  const c = document.getElementById("quickChips");
+  QUICK.forEach(q => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = q;
+    b.onclick = () => { document.getElementById("searchInp").value = q; doSearch(); };
+    c.appendChild(b);
+  });
+}
+
+// ── Search ─────────────────────────────────────────────────────
+function doSearch() {
+  const q = document.getElementById("searchInp").value.trim();
+  searchQuery = q;
+  render();
+}
+
+function findBest(q) {
+  if (!q) return null;
+  const exact = DB.find(e => e.key === q);
+  if (exact) return [exact];
+
+  const qWords = new Set(q.split(/\s+/));
+  const scored = DB.map(e => {
+    const kWords = new Set(e.key.split(/\s+/));
+    const overlap = [...kWords].filter(w => qWords.has(w)).length;
+    return { entry: e, score: overlap };
+  }).filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  return scored.length ? scored.map(x => x.entry) : null;
+}
+
+// ── Render card ────────────────────────────────────────────────
+function renderCard(entry) {
+  const meta = TYPE_META[entry.type] || { label: entry.type, en: entry.type };
+  const pillClass = `type-pill tp-${entry.type}`;
+
+  const meaningsHTML = entry.meanings.map((m, i) => `
+    <div class="meaning ${MCLASS[i]}">
+      <div class="mlabel">व्याख्या ${i+1} &mdash; Interpretation ${i+1}</div>
+      <div class="mhi">${m.hi}</div>
+      <div class="men">${m.en}</div>
+    </div>`).join("");
+
+  const exampleHTML = entry.example
+    ? `<div class="example-tag">💡 ${entry.example}</div>` : "";
+
+  return `
+    <div class="rcard">
+      <div class="rcard-hdr">
+        <span class="sent">${entry.key}</span>
+        <span class="${pillClass}">${meta.label} / ${meta.en}</span>
+      </div>
+      <div class="meanings-grid">${meaningsHTML}</div>
+      ${exampleHTML}
+    </div>`;
+}
+
+// ── Main render ────────────────────────────────────────────────
+function render() {
+  const out   = document.getElementById("mainOut");
+  const label = document.getElementById("browseLabel");
+  const sStat = document.getElementById("s-filtered");
+
+  let entries = DB;
+  if (activeFilter) entries = entries.filter(e => e.type === activeFilter);
+
+  if (searchQuery) {
+    const results = findBest(searchQuery);
+    if (!results) {
+      out.innerHTML = `<div class="notfound">
+        "<strong>${searchQuery}</strong>" — डेटाबेस में नहीं मिला।<br>
+        ऊपर के बटनों से उदाहरण चुनें या filter बदलें।
+      </div>`;
+      sStat.textContent = 0;
+      label.textContent = "SEARCH RESULTS";
+      return;
+    }
+    const filtered = activeFilter ? results.filter(e => e.type === activeFilter) : results;
+    sStat.textContent = filtered.length;
+    label.textContent = `SEARCH RESULTS — "${searchQuery}"`;
+    out.innerHTML = `<div class="result-wrap">${filtered.map(renderCard).join("")}</div>`;
+    return;
+  }
+
+  sStat.textContent = entries.length;
+  label.textContent = activeFilter
+    ? `BROWSING: ${TYPE_META[activeFilter]?.en.toUpperCase() || activeFilter.toUpperCase()}`
+    : "BROWSE ALL ENTRIES";
+
+  // Browse grid
+  const grid = entries.map(e => {
+    const meta = TYPE_META[e.type] || { label: e.type };
+    return `<div class="browse-card" onclick="selectEntry('${e.key.replace(/'/g,"\\'")}')">
+      <div class="bkey">${e.key}</div>
+      <div class="btype">${meta.label} / ${meta.en}</div>
+    </div>`;
+  }).join("");
+
+  out.innerHTML = `<div class="browse-grid">${grid}</div>`;
+}
+
+function selectEntry(key) {
+  document.getElementById("searchInp").value = key;
+  searchQuery = key;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ── Init ───────────────────────────────────────────────────────
+document.getElementById("s-total").textContent = DB.length;
+buildFilters();
+buildChips();
+render();
+
+document.getElementById("searchInp").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); doSearch(); }
+});
+</script>
+</body>
+</html>
